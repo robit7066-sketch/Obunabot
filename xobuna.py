@@ -31,8 +31,8 @@ from telethon.errors import (
     ChannelInvalidError,
     PeerIdInvalidError,
     ButtonUrlInvalidError,
-    ConnectionError,
-    RPCError
+    RPCError,
+    TransportError
 )
 
 # ============================================================================
@@ -286,7 +286,7 @@ async def join_channel_safe(client, username, session_name, retry_count=0):
     TUZATISHLAR V4.1:
     1. ✅ FloodWaitError ichida retry qilish
     2. ✅ Timeout xatolarini boshqarish
-    3. ✅ Connection xatolarini boshqarish
+    3. ✅ Transport xatolarini boshqarish (ConnectionError o'rniga)
     4. ✅ Invalid channel xatolarini boshqarish
     5. ✅ RPCError handling qo'shildi
     """
@@ -336,13 +336,23 @@ async def join_channel_safe(client, username, session_name, retry_count=0):
         if retry_count < max_retries:
             return await join_channel_safe(client, username, session_name, retry_count + 1)
         return False
+    except (TransportError, RPCError) as e:
+        error_str = str(e).lower()
+        if "already participant" in error_str or "already a member" in error_str:
+            logger.debug(f"[{session_name}] ℹ️ Allaqachon a'zo: {username}")
+            return True
+        logger.error(f"[{session_name}] ❌ Obuna xatosi: {type(e).__name__}: {e}")
+        if retry_count < max_retries and ("flood" in error_str or "timeout" in error_str):
+            await asyncio.sleep(bot_settings["RETRY_DELAY"])
+            return await join_channel_safe(client, username, session_name, retry_count + 1)
+        return False
     except Exception as e:
         error_str = str(e).lower()
         if "already participant" in error_str or "already a member" in error_str:
             logger.debug(f"[{session_name}] ℹ️ Allaqachon a'zo: {username}")
             return True
         logger.error(f"[{session_name}] ❌ Obuna xatosi: {type(e).__name__}: {e}")
-        if retry_count < max_retries and ("flood" in error_str or "timeout" in error_str or "connection" in error_str):
+        if retry_count < max_retries and ("flood" in error_str or "timeout" in error_str or "transport" in error_str):
             await asyncio.sleep(bot_settings["RETRY_DELAY"])
             return await join_channel_safe(client, username, session_name, retry_count + 1)
         return False
@@ -430,7 +440,7 @@ async def process_task(client, msg, session_name):
     KETMA-KETLIK:
     1. ✅ Tugmalarni topish (kanal + tasdiqlash)
     2. ✅ Agar kanal yo'q → RETURN (qoldir)
-    3. ��� Kanal obunasini bajarish
+    3. ✅ Kanal obunasini bajarish
     4. ✅ Agar tasdiqlash yo'q → RETURN (qoldir)
     5. ✅ Tasdiqlash tugmasini bosish
     6. ✅ State va statistika yangilash
@@ -734,7 +744,7 @@ async def start_userbot(session_name):
         except asyncio.TimeoutError:
             logger.error(f"[{session_name}] ⏱️ TIMEOUT: Client connect'da vaqt tugadi")
             return False
-        except (ConnectionError, Exception) as e:
+        except (TransportError, RPCError, Exception) as e:
             logger.error(f"[{session_name}] ❌ Connection xatosi: {e}")
             return False
         
@@ -953,11 +963,11 @@ async def start_handler(event):
     try:
         is_admin = event.sender_id == ADMIN_ID
         if is_admin:
-            await event.reply("👋 **Salom Admin!** 🤖 v4.1", buttons=get_main_menu(is_admin=True))
+            await event.reply("👋 **Salom Admin!** 🤖 v4.1 HOTFIX", buttons=get_main_menu(is_admin=True))
         else:
             await event.reply(
                 "👋 **Xush kelibsiz!**\n\n"
-                "🤖 **Multi-Account Bot v4.1**\n"
+                "🤖 **Multi-Account Bot v4.1 HOTFIX**\n"
                 "10 tagacha akkaunt boshqarishni taqdim etadi\n\n"
                 "📋 **Xususiyatlar:**\n"
                 "• Parallel vazifalar\n"
@@ -1379,12 +1389,12 @@ async def confirm_clear_sessions(event):
 # ============================================================================
 
 async def main():
-    """BOT ASOSIY FUNKSIYASI - TUZATILGAN v4.1 FINAL"""
+    """BOT ASOSIY FUNKSIYASI - TUZATILGAN v4.1 HOTFIX"""
     global bot_client
     
     try:
         logger.info("=" * 80)
-        logger.info("🚀 BOT BOSHLASHMOQDA - VERSIYA 4.1 FINAL")
+        logger.info("🚀 BOT BOSHLASHMOQDA - VERSIYA 4.1 HOTFIX")
         logger.info(f"📊 Maksimal akauntlar: {DEFAULT_SETTINGS['MAX_ACCOUNTS']}")
         logger.info("✅ BARCHA XATOLAR VA KAMCHILIKLAR 100% TUZATILDI")
         logger.info("✅ VAZIFALAR QOLMASLIGI 100% GARANTILANGAN")
